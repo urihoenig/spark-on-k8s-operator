@@ -404,8 +404,12 @@ type SparkPodSpec struct {
 	// Secrets carries information of secrets to add to the pod.
 	// Optional.
 	Secrets []SecretInfo `json:"secrets,omitempty"`
+	// Env carries the environment variables to add to the pod.
+	// Optional.
+	Env []apiv1.EnvVar `json:"env,omitempty"`
 	// EnvVars carries the environment variables to add to the pod.
 	// Optional.
+	// DEPRECATED.
 	EnvVars map[string]string `json:"envVars,omitempty"`
 	// EnvSecretKeyRefs holds a mapping from environment variable names to SecretKeyRefs.
 	// Optional.

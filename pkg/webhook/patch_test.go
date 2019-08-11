@@ -1108,6 +1108,108 @@ func TestPatchSparkPod_HostNetwork(t *testing.T) {
 	}
 }
 
+func TestPatchSparkPod_Env(t *testing.T) {
+	drvEnvKey := "TEST_DRV_ENV_VAR_KEY"
+	drvEnvVal := "test_drv_env_var_val"
+	exeEnvKey := "TEST_EXE_ENV_VAR_KEY"
+	exeEnvVal := "test_exe_env_var_val"
+
+	numOfEnvVars := 3
+
+	var drvEnvVars []corev1.EnvVar
+	var exeEnvVars []corev1.EnvVar
+
+	for i := 0; i < numOfEnvVars; i++ {
+		drvEnvVars = append(drvEnvVars, corev1.EnvVar{
+			Name:  fmt.Sprintf("%s_%d", drvEnvKey, i),
+			Value: fmt.Sprintf("%s_%d", drvEnvVal, i),
+		})
+		exeEnvVars = append(exeEnvVars, corev1.EnvVar{
+			Name:  fmt.Sprintf("%s_%d", exeEnvKey, i),
+			Value: fmt.Sprintf("%s_%d", exeEnvVal, i),
+		})
+	}
+
+	app := &v1beta2.SparkApplication{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "spark-test",
+			UID:  "spark-test-1",
+		},
+		Spec: v1beta2.SparkApplicationSpec{
+			Executor: v1beta2.ExecutorSpec{
+				SparkPodSpec: v1beta2.SparkPodSpec{
+					Env: exeEnvVars,
+				},
+			},
+			Driver: v1beta2.DriverSpec{
+				SparkPodSpec: v1beta2.SparkPodSpec{
+					Env: drvEnvVars,
+				},
+			},
+		},
+	}
+
+	executorPod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "spark-executor",
+			Labels: map[string]string{
+				config.SparkRoleLabel:               config.SparkExecutorRole,
+				config.LaunchedBySparkOperatorLabel: "true",
+			},
+		},
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
+				{
+					Name:  config.SparkExecutorContainerName,
+					Image: "spark-driver:latest",
+				},
+			},
+		},
+	}
+
+	driverPod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "spark-driver",
+			Labels: map[string]string{
+				config.SparkRoleLabel:               config.SparkDriverRole,
+				config.LaunchedBySparkOperatorLabel: "true",
+			},
+		},
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
+				{
+					Name:  config.SparkDriverContainerName,
+					Image: "spark-driver:latest",
+				},
+			},
+		},
+	}
+
+	modifiedExecutorPod, err := getModifiedPod(executorPod, app)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assert.Equal(t, numOfEnvVars, len(modifiedExecutorPod.Spec.Containers[0].Env))
+	for i, envVar := range exeEnvVars {
+		assert.Equal(t, envVar.Name, modifiedExecutorPod.Spec.Containers[0].Env[i].Name)
+		assert.Equal(t, envVar.Value, modifiedExecutorPod.Spec.Containers[0].Env[i].Value)
+	}
+	assert.True(t, modifiedExecutorPod.Spec.Containers[0].Env[0].ValueFrom == nil)
+
+	modifiedDriverPod, err := getModifiedPod(driverPod, app)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assert.Equal(t, numOfEnvVars, len(modifiedDriverPod.Spec.Containers[0].Env))
+	for i, envVar := range drvEnvVars {
+		assert.Equal(t, envVar.Name, modifiedDriverPod.Spec.Containers[0].Env[i].Name)
+		assert.Equal(t, envVar.Value, modifiedDriverPod.Spec.Containers[0].Env[i].Value)
+	}
+	assert.True(t, modifiedDriverPod.Spec.Containers[0].Env[0].ValueFrom == nil)
+}
+
 func getModifiedPod(pod *corev1.Pod, app *v1beta2.SparkApplication) (*corev1.Pod, error) {
 	patchOps := patchSparkPod(pod, app)
 	patchBytes, err := json.Marshal(patchOps)
